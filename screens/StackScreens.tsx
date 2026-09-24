@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DistrictMap } from "../components/DistrictMap";
+import { districtName, findDistrict, joinDistricts } from "../lib/districts";
 import { ago, liveTanker, reportLabel } from "../lib/format";
 import { colors, font } from "../lib/theme";
 import type { Profile, Snapshot } from "../lib/types";
@@ -43,16 +44,26 @@ export function HistoryScreen({
   profile: Profile;
   onBack: () => void;
 }) {
-  const mine = snapshot.reports.filter((report) => report.residentName === profile.name);
+  const mine = snapshot.reports.filter(
+    (report) => report.residentName === profile.name && report.districtId === profile.districtId && report.building === profile.building,
+  );
   return (
     <View style={styles.screen}>
       <ScreenHeader title="История сигналов" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.pad}>
+        {mine.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Сигналов пока нет</Text>
+            <Text style={styles.cardBody}>
+              По адресу {districtName(profile.districtId)}, дом {profile.building} ещё ничего не отправлено. Сообщение с карты появится здесь.
+            </Text>
+          </View>
+        ) : null}
         {mine.map((report) => (
           <View key={report.id} style={styles.card}>
             <Text style={styles.cardTitle}>{reportLabel(report.type)}</Text>
             <Text style={styles.cardBody}>
-              {report.districtId} мкр, дом {report.building}
+              {districtName(report.districtId)}, дом {report.building}
               {report.confirmed ? " · подтверждено" : ""}
             </Text>
             <Text style={styles.time}>{ago(report.createdAt, snapshot.serverTime)}</Text>
@@ -74,52 +85,66 @@ export function FavoritesScreen({
   onToggle: (id: string) => void;
   onBack: () => void;
 }) {
+  const [query, setQuery] = useState("");
+  const districts = joinDistricts(snapshot.districts);
+  const saved = districts.filter((district) => profile.favorites.includes(district.id));
+  const needle = query.trim().toLowerCase();
+  const rest = needle
+    ? districts.filter(
+        (district) =>
+          !profile.favorites.includes(district.id) &&
+          (district.name.toLowerCase().includes(needle) ||
+            district.nameKk.toLowerCase().includes(needle) ||
+            district.id.toLowerCase().includes(needle)),
+      )
+    : [];
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Избранные районы" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.pad}>
-        {snapshot.districts.map((district) => {
-          const on = profile.favorites.includes(district.id);
-          return (
-            <Pressable key={district.id} style={styles.row} onPress={() => onToggle(district.id)}>
-              <Text style={styles.cardTitle}>{district.name}</Text>
-              <Ionicons name={on ? "heart" : "heart-outline"} size={22} color={on ? colors.red : colors.muted} />
-            </Pressable>
-          );
-        })}
+      <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
+        {saved.length === 0 ? <Text style={styles.note}>Сохранённых районов нет.</Text> : null}
+        {saved.map((district) => (
+          <Pressable key={district.id} style={styles.row} onPress={() => onToggle(district.id)}>
+            <Text style={styles.cardTitle}>{district.name}</Text>
+            <Ionicons name="heart" size={22} color={colors.red} />
+          </Pressable>
+        ))}
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Найти район, чтобы добавить"
+          placeholderTextColor={colors.muted}
+          style={styles.field}
+        />
+        {!needle ? <Text style={styles.note}>Остальные районы откроются через поиск, весь список здесь не нужен.</Text> : null}
+        {rest.map((district) => (
+          <Pressable key={district.id} style={styles.row} onPress={() => onToggle(district.id)}>
+            <Text style={styles.cardTitle}>{district.name}</Text>
+            <Ionicons name="heart-outline" size={22} color={colors.muted} />
+          </Pressable>
+        ))}
+        {needle && rest.length === 0 ? <Text style={styles.note}>Ничего не найдено</Text> : null}
       </ScrollView>
     </View>
   );
 }
 
 export function LanguageScreen({
-  language,
-  onChange,
   onBack,
 }: {
   language: Profile["language"];
   onChange: (language: Profile["language"]) => void;
   onBack: () => void;
 }) {
-  const options: { id: Profile["language"]; label: string }[] = [
-    { id: "ru", label: "Русский" },
-    { id: "kk", label: "Қазақша" },
-  ];
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Язык приложения" onBack={onBack} />
       <View style={styles.pad}>
-        {options.map((option) => (
-          <Pressable key={option.id} style={styles.row} onPress={() => onChange(option.id)}>
-            <Text style={styles.cardTitle}>{option.label}</Text>
-            {language === option.id ? <Ionicons name="checkmark" size={22} color={colors.blue} /> : null}
-          </Pressable>
-        ))}
-        <Text style={styles.note}>
-          {language === "ru"
-            ? "Интерфейс жителя показан на русском, как в макете."
-            : "Қазақ тілі сақталды. Негізгі экрандар әзірге орыс тілінде."}
-        </Text>
+        <View style={styles.row}>
+          <Text style={styles.cardTitle}>Русский</Text>
+          <Ionicons name="checkmark" size={22} color={colors.blue} />
+        </View>
+        <Text style={styles.note}>Қазақша скрыта, пока нет строк. Интерфейс только на русском.</Text>
       </View>
     </View>
   );
@@ -159,7 +184,7 @@ export function AboutScreen({ onBack }: { onBack: () => void }) {
       <View style={styles.pad}>
         <Text style={styles.cardTitle}>Komektesu</Text>
         <Text style={styles.cardBody}>
-          Карта воды в Актау для жителей и диспетчерская для акимата. Зелёный район — давление в норме, жёлтый — подача по графику, красный — воды нет. Водовоз можно отследить на карте, как машину в пути.
+          Карта микрорайонов Актау взята из OpenStreetMap: берег, дороги и границы настоящие. Давление, водовозы и жалобы на этой сборке — демо, пока нет телеметрии КЖСА. Зелёный район — норма, жёлтый — слабый напор, красный — воды нет.
         </Text>
       </View>
     </View>
@@ -179,21 +204,47 @@ export function AddressScreen({
 }) {
   const [districtId, setDistrictId] = useState(profile.districtId);
   const [building, setBuilding] = useState(profile.building);
+  const [query, setQuery] = useState("");
+  const districts = joinDistricts(snapshot.districts);
+  const selected = findDistrict(districts, districtId);
+  const needle = query.trim().toLowerCase();
+  const matches = needle
+    ? districts.filter(
+        (district) =>
+          district.name.toLowerCase().includes(needle) ||
+          district.nameKk.toLowerCase().includes(needle) ||
+          district.id.toLowerCase().includes(needle),
+      )
+    : [];
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Адрес" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.pad}>
+      <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
         <Text style={styles.label}>Микрорайон</Text>
-        <View style={styles.chips}>
-          {snapshot.districts.map((district) => (
+        <Text style={styles.picked}>{selected?.name ?? districtId}</Text>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Поиск: 14, Шығыс, Самал…"
+          placeholderTextColor={colors.muted}
+          style={styles.field}
+        />
+        <View style={styles.menu}>
+          {matches.map((district) => (
             <Pressable
               key={district.id}
-              style={[styles.chip, district.id === districtId && styles.chipOn]}
-              onPress={() => setDistrictId(district.id)}
+              style={styles.menuItem}
+              onPress={() => {
+                setDistrictId(district.id);
+                setQuery("");
+              }}
             >
-              <Text style={[styles.chipText, district.id === districtId && styles.chipTextOn]}>{district.name}</Text>
+              <Text style={[styles.cardTitle, district.id === districtId && { color: colors.blue }]}>{district.name}</Text>
+              {district.id === districtId ? <Ionicons name="checkmark" size={18} color={colors.blue} /> : null}
             </Pressable>
           ))}
+          {needle && matches.length === 0 ? <Text style={styles.note}>Ничего не найдено</Text> : null}
+          {!needle ? <Text style={styles.note}>В списке около 66 районов — начните вводить номер или название.</Text> : null}
         </View>
         <Text style={styles.label}>Дом</Text>
         <TextInput value={building} onChangeText={setBuilding} keyboardType="number-pad" style={styles.field} />
@@ -217,7 +268,7 @@ export function RequestsScreen({ snapshot, now, onBack, onTrack }: { snapshot: S
             <Pressable key={request.id} style={styles.card} onPress={() => tanker && onTrack(tanker.id)}>
               <Text style={styles.cardTitle}>Заявка №{request.number}</Text>
               <Text style={styles.cardBody}>
-                {request.districtId} мкр, дом {request.building}
+                {districtName(request.districtId)}, дом {request.building}
                 {tanker ? ` · водовоз №${tanker.number}` : ""}
                 {live && request.status === "en_route" ? ` · ${live.eta} мин` : ""}
               </Text>
@@ -241,9 +292,15 @@ export function TrackScreen({
   onBack: () => void;
 }) {
   const tanker = snapshot.tankers.find((item) => item.id === tankerId);
-  const district = snapshot.districts.find((item) => item.id === (tanker?.targetDistrictId ?? snapshot.homeDistrictId));
+  const districts = joinDistricts(snapshot.districts);
+  const district = findDistrict(districts, tanker?.targetDistrictId ?? snapshot.homeDistrictId);
   const live = tanker ? liveTanker(tanker, now) : null;
-  const home = district ? { x: district.anchor.x, y: district.anchor.y + 16 } : null;
+  const home = district ? { x: district.center.x, y: district.center.y } : null;
+  const fitPoints = [
+    ...(home ? [home] : []),
+    ...(tanker ? [{ x: tanker.startX, y: tanker.startY }, { x: tanker.targetX, y: tanker.targetY }] : []),
+    ...(live ? [{ x: live.x, y: live.y }] : []),
+  ];
   return (
     <View style={styles.screen}>
       <ScreenHeader title={tanker ? `Водовоз №${tanker.number}` : "Водовоз"} onBack={onBack} />
@@ -256,12 +313,14 @@ export function TrackScreen({
           home={home}
           trackTankerId={tankerId}
           selectedId={district?.id}
+          fitKey={tankerId}
+          fitPoints={fitPoints}
         />
       </View>
       <View style={styles.trackCard}>
         <Text style={styles.cardTitle}>
-          {tanker && live && tanker.status === "en_route"
-            ? `Водовоз №${tanker.number} прибудет к вашему дому через ${live.eta} мин`
+            {tanker && live && tanker.status === "en_route"
+            ? `Водовоз №${tanker.number} прибудет к вашему дому через ${live.eta} мин · демо`
             : tanker?.status === "serving"
               ? `Водовоз №${tanker.number} на месте`
               : "Машина ещё не выехала"}
@@ -292,6 +351,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   note: { fontFamily: font.regular, fontSize: 13, color: colors.secondary, lineHeight: 18, marginTop: 8 },
+  picked: { fontFamily: font.bold, fontSize: 18, color: colors.text },
+  menu: { backgroundColor: colors.white, borderRadius: 16, overflow: "hidden" },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
   input: {
     minHeight: 120,
     backgroundColor: colors.white,

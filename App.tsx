@@ -4,6 +4,7 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { TabBar, type TabId } from "./components/TabBar";
 import { fetchState, markRead, requestTanker, sendReport } from "./lib/api";
+import { districtName } from "./lib/districts";
 import { colors, font } from "./lib/theme";
 import type { Profile, ReportType, Snapshot } from "./lib/types";
 import { MapScreen } from "./screens/MapScreen";
@@ -105,13 +106,7 @@ export default function App() {
         residentName: profile.name,
       });
       setSnapshot(next);
-      const tanker = next.tankers.find((item) => item.targetDistrictId === selectedId && item.status === "en_route");
-      if (tanker) {
-        setSuccess(`Водовоз №${tanker.number} прибудет к вашему дому через ${tanker.etaMinutes} минут.`);
-        setToast(`Водовоз №${tanker.number} прибудет к вашему дому через ${tanker.etaMinutes} минут.`);
-      } else {
-        setSuccess("Сигнал принят. Диспетчер видит его на карте.");
-      }
+      setSuccess("Сигнал принят. Диспетчер видит его на карте.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось отправить");
     } finally {
@@ -128,13 +123,19 @@ export default function App() {
         residentName: profile.name,
       });
       setSnapshot(next);
-      const tanker = next.tankers.find((item) => item.status === "en_route" && item.targetDistrictId === profile.districtId);
-      if (tanker) {
-        setToast(`Водовоз №${tanker.number} прибудет к вашему дому через ${tanker.etaMinutes} минут.`);
-        setStack({ name: "track", tankerId: tanker.id });
+      const mine = next.requests.find(
+        (item) =>
+          item.districtId === profile.districtId &&
+          item.building === profile.building &&
+          item.status !== "done",
+      );
+      if (mine?.status === "en_route" && mine.tankerId) {
+        setStack({ name: "track", tankerId: mine.tankerId });
+      } else {
+        setToast("Заявка у диспетчера. Водовоз выедет после назначения.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Нет свободных водовозов");
+      setError(err instanceof Error ? err.message : "Не удалось отправить заявку");
     } finally {
       setBusy(false);
     }
@@ -155,7 +156,7 @@ export default function App() {
   }
 
   const profileBlue = tab === "profile" && !stack;
-  const placeDistrict = snapshot.districts.find((district) => district.id === selectedId);
+  const placeName = districtName(selectedId);
 
   function openTrack(tankerId: string) {
     setReportOpen(false);
@@ -252,7 +253,7 @@ export default function App() {
       ) : null}
       {reportOpen ? (
         <ReportSheet
-          place={`${placeDistrict?.name ?? selectedId}, дом ${profile.building}`}
+          place={`${placeName}, дом ${profile.building}`}
           busy={busy}
           success={success}
           onClose={() => setReportOpen(false)}

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { dayLabel, statusColor, statusLabel } from "../lib/format";
+import { findDistrict, joinDistricts } from "../lib/districts";
+import { statusColor, statusLabel } from "../lib/format";
 import { colors, font } from "../lib/theme";
 import type { Snapshot } from "../lib/types";
 
@@ -14,9 +15,10 @@ export function ScheduleScreen({
   districtId: string;
   onDistrict: (id: string) => void;
 }) {
-  const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState(false);
-  const district = snapshot.districts.find((item) => item.id === districtId) ?? snapshot.districts[0];
+  const [query, setQuery] = useState("");
+  const districts = joinDistricts(snapshot.districts);
+  const district = findDistrict(districts, districtId);
   const slots = snapshot.schedules[district.id] ?? [];
   const warning =
     district.status === "none"
@@ -28,7 +30,7 @@ export function ScheduleScreen({
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>График подачи</Text>
-      {warning && offset === 0 ? (
+      {warning ? (
         <View style={styles.warning}>
           <Ionicons name="warning" size={22} color={colors.amber} />
           <Text style={styles.warningText}>{warning}</Text>
@@ -46,13 +48,28 @@ export function ScheduleScreen({
       </View>
       {open ? (
         <View style={styles.menu}>
-          {snapshot.districts.map((item) => (
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Найти район"
+            placeholderTextColor={colors.muted}
+            style={styles.search}
+          />
+          {!query.trim() ? <Text style={styles.hint}>Введите номер или название района</Text> : null}
+          {districts
+            .filter((item) => {
+              const needle = query.trim().toLowerCase();
+              if (!needle) return false;
+              return item.name.toLowerCase().includes(needle) || item.nameKk.toLowerCase().includes(needle) || item.id.toLowerCase().includes(needle);
+            })
+            .map((item) => (
             <Pressable
               key={item.id}
               style={styles.menuItem}
               onPress={() => {
                 onDistrict(item.id);
                 setOpen(false);
+                setQuery("");
               }}
             >
               <Text style={styles.menuText}>{item.name}</Text>
@@ -65,18 +82,11 @@ export function ScheduleScreen({
       ) : null}
       <View style={styles.dateRow}>
         <View style={styles.dateLabel}>
-          <Ionicons name="calendar-outline" size={18} color={colors.text} />
-          <Text style={styles.dateText}>{dayLabel(offset)}</Text>
-        </View>
-        <View style={styles.dateNav}>
-          <Pressable hitSlop={8} onPress={() => setOffset((value) => value - 1)}>
-            <Ionicons name="chevron-back" size={18} color={colors.text} />
-          </Pressable>
-          <Pressable hitSlop={8} onPress={() => setOffset((value) => value + 1)}>
-            <Ionicons name="chevron-forward" size={18} color={colors.text} />
-          </Pressable>
+          <Ionicons name="repeat-outline" size={18} color={colors.text} />
+          <Text style={styles.dateText}>Постоянный график</Text>
         </View>
       </View>
+      <Text style={styles.patternNote}>Один шаблон на район. Отдельных дней сервер не присылает.</Text>
       <View style={styles.list}>
         {slots.map((slot, index) => (
           <View key={`${slot.from}-${slot.to}`}>
@@ -143,7 +153,17 @@ const styles = StyleSheet.create({
   selectText: { fontFamily: font.semibold, fontSize: 14, color: colors.text },
   other: { flexDirection: "row", alignItems: "center", gap: 6 },
   otherText: { fontFamily: font.semibold, fontSize: 14, color: colors.blue },
-  menu: { backgroundColor: colors.white, borderRadius: 16, overflow: "hidden" },
+  menu: { backgroundColor: colors.white, borderRadius: 16, overflow: "hidden", maxHeight: 320 },
+  hint: { fontFamily: font.regular, fontSize: 13, color: colors.secondary, padding: 14 },
+  search: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: font.regular,
+    fontSize: 15,
+    color: colors.text,
+  },
   menuItem: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -156,7 +176,7 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
   dateLabel: { flexDirection: "row", alignItems: "center", gap: 8 },
   dateText: { fontFamily: font.semibold, fontSize: 16, color: colors.text },
-  dateNav: { flexDirection: "row", gap: 14 },
+  patternNote: { fontFamily: font.regular, fontSize: 12, color: colors.muted, marginTop: -6 },
   list: { backgroundColor: colors.white, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
   slot: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 11, gap: 8 },
   when: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },

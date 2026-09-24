@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { DistrictMap } from "../components/DistrictMap";
+import { districtName, joinDistricts } from "../lib/districts";
 import { ago, liveTanker, tankerLabel } from "../lib/format";
 import { colors, font } from "../lib/theme";
 import type { DeliveryRequest, Snapshot, Tanker } from "../lib/types";
@@ -25,7 +26,10 @@ export function TankersScreen({
     .sort((a, b) => (a.etaToHome ?? 99) - (b.etaToHome ?? 99));
   const nearest = idle[0] ?? snapshot.tankers.find((tanker) => tanker.status === "en_route");
   const active = snapshot.requests.filter((request) => request.status !== "done");
-  const moving = snapshot.tankers.some((tanker) => tanker.status === "en_route");
+  const mine = active.find((request) => request.districtId === snapshot.homeDistrictId);
+  const assigned = mine?.tankerId
+    ? snapshot.tankers.find((tanker) => tanker.id === mine.tankerId)
+    : undefined;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -33,12 +37,21 @@ export function TankersScreen({
       <View style={styles.banner}>
         <MaterialCommunityIcons name="water" size={20} color={colors.blue} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.bannerTitle}>Доступно {snapshot.tankers.length} водовозов в городе</Text>
+          <Text style={styles.bannerTitle}>Демо: {snapshot.tankers.length} водовозов на карте</Text>
           <Text style={styles.bannerSub}>Обновлено {ago(snapshot.serverTime - 2 * 60 * 1000, snapshot.serverTime)}</Text>
         </View>
       </View>
       <View style={styles.mapCard}>
-        <DistrictMap districts={snapshot.districts} tankers={snapshot.tankers} showTankers now={now} />
+        <DistrictMap
+          districts={joinDistricts(snapshot.districts)}
+          tankers={snapshot.tankers}
+          showTankers
+          now={now}
+          home={(() => {
+            const home = joinDistricts(snapshot.districts).find((item) => item.id === snapshot.homeDistrictId);
+            return home ? { x: home.center.x, y: home.center.y } : null;
+          })()}
+        />
         {nearest ? (
           <View style={styles.nearest}>
             <View style={styles.nearestHead}>
@@ -55,7 +68,7 @@ export function TankersScreen({
             <View style={styles.metaRow}>
               <View style={styles.meta}>
                 <Ionicons name="time-outline" size={14} color={colors.secondary} />
-                <Text style={styles.metaText}>До вас {nearest.etaToHome ?? nearest.etaMinutes} мин</Text>
+                <Text style={styles.metaText}>До вас {nearest.etaToHome ?? nearest.etaMinutes} мин · демо</Text>
               </View>
               <View style={styles.meta}>
                 <MaterialCommunityIcons name="water" size={14} color={colors.blue} />
@@ -63,12 +76,18 @@ export function TankersScreen({
               </View>
             </View>
             <Pressable
-              style={styles.cta}
-              disabled={busy}
-              onPress={() => (moving && nearest.status !== "idle" ? onTrack(nearest.id) : onRequest())}
+              style={[styles.cta, mine?.status === "accepted" ? styles.ctaWait : null]}
+              disabled={busy || mine?.status === "accepted"}
+              onPress={() => (assigned ? onTrack(assigned.id) : onRequest())}
             >
               <Text style={styles.ctaText}>
-                {nearest.status === "en_route" ? "Следить на карте" : busy ? "Отправляем…" : "Запросить подвоз"}
+                {assigned
+                  ? "Следить на карте"
+                  : mine?.status === "accepted"
+                    ? "Ожидает диспетчера"
+                    : busy
+                      ? "Отправляем…"
+                      : "Запросить подвоз"}
               </Text>
             </Pressable>
           </View>
@@ -97,7 +116,12 @@ export function TankersScreen({
 function RequestCard({ request, tanker, now }: { request: DeliveryRequest; tanker?: Tanker; now: number }) {
   const live = tanker ? liveTanker(tanker, now) : null;
   const state = request.status === "done" ? "На месте" : request.status === "en_route" ? "В пути" : "Принята";
-  const eta = live && request.status === "en_route" ? `На подходе ~ ${live.eta} мин` : request.status === "accepted" ? `На подходе ~ ${tanker?.etaToHome ?? 8} мин` : "Можно набирать воду";
+  const eta =
+    live && request.status === "en_route"
+      ? `На подходе ~ ${live.eta} мин · демо`
+      : request.status === "accepted"
+        ? "Ожидает назначения диспетчера"
+        : "Можно набирать воду";
   return (
     <View style={styles.request}>
       <View style={styles.truckIconLg}>
@@ -106,7 +130,7 @@ function RequestCard({ request, tanker, now }: { request: DeliveryRequest; tanke
       <View style={{ flex: 1 }}>
         <Text style={styles.requestTitle}>Заявка №{request.number}</Text>
         <Text style={styles.requestSub}>
-          {request.districtId} мкр, дом {request.building}
+          {districtName(request.districtId)}, дом {request.building}
         </Text>
       </View>
       <View style={styles.requestState}>
@@ -169,6 +193,7 @@ const styles = StyleSheet.create({
   meta: { flexDirection: "row", alignItems: "center", gap: 6 },
   metaText: { fontFamily: font.medium, fontSize: 13, color: colors.secondary },
   cta: { backgroundColor: colors.blue, borderRadius: 999, alignItems: "center", paddingVertical: 12 },
+  ctaWait: { backgroundColor: colors.secondary },
   ctaText: { fontFamily: font.semibold, fontSize: 16, color: colors.white },
   requestsHead: {
     marginTop: 14,

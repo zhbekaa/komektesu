@@ -2,9 +2,10 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { DistrictMap } from "../components/DistrictMap";
-import { ago, statusColor, statusLabel } from "../lib/format";
+import { findDistrict, joinDistricts, type DistrictView } from "../lib/districts";
+import { ago, causeLine, MAP_FILL, statusColor, statusLabel } from "../lib/format";
 import { colors, font } from "../lib/theme";
-import type { District, Snapshot } from "../lib/types";
+import type { Snapshot } from "../lib/types";
 
 export function MapScreen({
   snapshot,
@@ -25,25 +26,44 @@ export function MapScreen({
 }) {
   const [query, setQuery] = useState("");
   const [legend, setLegend] = useState(false);
-  const selected = snapshot.districts.find((district) => district.id === selectedId) ?? snapshot.districts[0];
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [focusNonce, setFocusNonce] = useState(0);
+  const districts = joinDistricts(snapshot.districts);
+  const selected = findDistrict(districts, selectedId);
   const unread = snapshot.notifications.filter((item) => !item.read).length;
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return snapshot.districts.filter((district) => district.name.toLowerCase().includes(q) || district.id.includes(q));
-  }, [query, snapshot.districts]);
+    return districts.filter(
+      (district) =>
+        district.name.toLowerCase().includes(q) ||
+        district.nameKk.toLowerCase().includes(q) ||
+        district.id.includes(q),
+    );
+  }, [query, districts]);
 
-  const none = snapshot.districts.filter((district) => district.status === "none");
-  const low = snapshot.districts.filter((district) => district.status === "low");
-  const selectedStatus = selected.status;
+  const none = districts.filter((district) => district.status === "none");
+  const low = districts.filter((district) => district.status === "low");
+  const others = [...none, ...low].filter((district) => district.id !== selected.id).length;
   const banner =
-    selectedStatus === "none"
-      ? { bg: colors.redSoft, color: colors.red, text: `Нет воды: ${selected.name}` }
-      : none.length <= 1 && low.length <= 1
-        ? { bg: colors.greenSoft, color: colors.green, text: "Вода подается стабильно в большинстве районов" }
-        : none.length
-          ? { bg: colors.redSoft, color: colors.red, text: `Нет воды: ${none.map((district) => district.name).join(", ")}` }
-          : { bg: colors.amberSoft, color: colors.amber, text: `Слабый напор: ${low.map((district) => district.name).join(", ")}` };
+    selected.status === "none"
+      ? { bg: colors.redSoft, color: colors.red, text: others ? `Нет воды: ${selected.name} · ещё ${others}` : `Нет воды: ${selected.name}` }
+      : selected.status === "low"
+        ? { bg: colors.amberSoft, color: colors.amber, text: others ? `Слабый напор: ${selected.name} · ещё ${others}` : `Слабый напор: ${selected.name}` }
+        : none.length || low.length
+          ? {
+              bg: colors.amberSoft,
+              color: colors.amber,
+              text: `${selected.name}: норма · ${[none.length ? `нет воды ${none.length}` : "", low.length ? `слабый напор ${low.length}` : ""].filter(Boolean).join(", ")}`,
+            }
+          : { bg: colors.greenSoft, color: colors.green, text: `${selected.name}: вода подаётся стабильно` };
+
+  function choose(id: string) {
+    onSelect(id);
+    setFocusId(id);
+    setFocusNonce((value) => value + 1);
+    setQuery("");
+  }
 
   return (
     <View style={styles.screen}>
@@ -72,10 +92,7 @@ export function MapScreen({
             <Pressable
               key={district.id}
               style={styles.result}
-              onPress={() => {
-                onSelect(district.id);
-                setQuery("");
-              }}
+              onPress={() => choose(district.id)}
             >
               <Text style={styles.resultText}>{district.name}</Text>
               <Text style={{ color: statusColor(district.status), fontFamily: font.medium, fontSize: 13 }}>
@@ -88,11 +105,24 @@ export function MapScreen({
       <View style={styles.bannerWrap}>
         <View style={[styles.banner, { backgroundColor: banner.bg }]}>
           <MaterialCommunityIcons name="water" size={16} color={banner.color} />
-          <Text style={[styles.bannerText, { color: banner.color }]}>{banner.text}</Text>
+          <Text style={[styles.bannerText, { color: banner.color }]} numberOfLines={2}>
+            {banner.text}
+          </Text>
         </View>
       </View>
       <View style={styles.mapWrap}>
-        <DistrictMap districts={snapshot.districts} selectedId={selected.id} onSelect={onSelect} now={now} />
+        <DistrictMap
+          districts={districts}
+          selectedId={selected.id}
+          focusId={focusId}
+          focusNonce={focusNonce}
+          onSelect={choose}
+          now={now}
+          home={(() => {
+            const home = findDistrict(districts, snapshot.homeDistrictId);
+            return home ? { x: home.center.x, y: home.center.y } : null;
+          })()}
+        />
         <Pressable style={styles.eye} onPress={() => setLegend((value) => !value)}>
           <Ionicons name={legend ? "eye-off-outline" : "eye-outline"} size={20} color={colors.text} />
         </Pressable>
@@ -107,7 +137,7 @@ export function MapScreen({
   );
 }
 
-function DistrictCard({ district, now }: { district: District; now: number }) {
+function DistrictCard({ district, now }: { district: DistrictView; now: number }) {
   const color = statusColor(district.status);
   return (
     <View style={styles.card}>
@@ -118,17 +148,16 @@ function DistrictCard({ district, now }: { district: District; now: number }) {
           <Text style={[styles.pressureText, { color }]}>{statusLabel(district.status)}</Text>
         </View>
       </View>
-      {district.expectedNormalAt ? (
+      {district.cause ? (
         <View style={styles.meta}>
-          <Ionicons name="time-outline" size={14} color={colors.secondary} />
-          <Text style={styles.metaText}>Ожидаемое время нормы: {district.expectedNormalAt}</Text>
+          <Ionicons name="warning-outline" size={14} color={colors.secondary} />
+          <Text style={styles.metaText}>{causeLine(district.cause, district.expectedNormalAt)}</Text>
         </View>
-      ) : (
-        <View style={styles.meta}>
-          <Ionicons name="speedometer-outline" size={14} color={colors.secondary} />
-          <Text style={styles.metaText}>Давление {district.pressureBar.toFixed(1)} бар</Text>
-        </View>
-      )}
+      ) : null}
+      <View style={styles.meta}>
+        <Ionicons name="speedometer-outline" size={14} color={colors.secondary} />
+        <Text style={styles.metaText}>Давление {district.pressureBar.toFixed(1)} бар · демо</Text>
+      </View>
       <View style={styles.updated}>
         <View style={styles.meta}>
           <Ionicons name="refresh" size={14} color={colors.muted} />
@@ -142,9 +171,9 @@ function DistrictCard({ district, now }: { district: District; now: number }) {
 
 function Legend() {
   const rows = [
-    { color: "#8FCF7C", label: "Нормальное давление" },
-    { color: "#F2C94C", label: "Слабый напор / по графику" },
-    { color: "#F08A8A", label: "Воды нет" },
+    { color: MAP_FILL.normal, label: "Нормальное давление" },
+    { color: MAP_FILL.low, label: "Слабый напор / по графику" },
+    { color: MAP_FILL.none, label: "Воды нет" },
   ];
   return (
     <View style={styles.legend}>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { districtName } from "../lib/districts";
 import { lastSignalLabel } from "../lib/format";
 import { colors, font } from "../lib/theme";
 import type { Profile, Snapshot } from "../lib/types";
@@ -16,11 +17,13 @@ export function ProfileScreen({
   profile: Profile;
   onOpen: (route: ProfileRoute) => void;
 }) {
-  const mine = snapshot.reports.filter((report) => report.residentName === profile.name);
+  const mine = snapshot.reports.filter(
+    (report) => report.residentName === profile.name && report.districtId === profile.districtId && report.building === profile.building,
+  );
   const confirmed = mine.filter((report) => report.confirmed).length;
   const last = mine[0];
   const unread = snapshot.notifications.filter((item) => !item.read).length;
-  const district = snapshot.districts.find((item) => item.id === profile.districtId);
+  const homeName = districtName(profile.districtId);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 24 }}>
@@ -32,7 +35,7 @@ export function ProfileScreen({
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{profile.name}</Text>
             <Text style={styles.address}>
-              {district?.name ?? profile.districtId}, дом {profile.building}
+              {homeName}, дом {profile.building}
             </Text>
           </View>
           <Pressable onPress={() => onOpen("notifications")} hitSlop={8}>
