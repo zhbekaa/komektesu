@@ -29,7 +29,7 @@ export function sendReport(input: {
 }
 
 export function requestTanker(input: { districtId: string; building: string; residentName: string }) {
-  return request("/api/dispatch", input);
+  return request("/api/requests", input);
 }
 
 export function markRead() {

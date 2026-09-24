@@ -12,10 +12,16 @@ export function statusColor(status: WaterStatus) {
   return "#E5484D";
 }
 
-export function fillFor(status: WaterStatus, baseFill: string) {
-  if (status === "low") return "#F2C94C";
-  if (status === "none") return "#F08A8A";
-  return baseFill;
+export const MAP_FILL = {
+  normal: "#71BE8C",
+  low: "#EFB44A",
+  none: "#E4726E",
+} as const;
+
+export function fillFor(status: WaterStatus) {
+  if (status === "low") return MAP_FILL.low;
+  if (status === "none") return MAP_FILL.none;
+  return MAP_FILL.normal;
 }
 
 export function reportLabel(type: ReportType) {
@@ -54,6 +60,13 @@ export function lastSignalLabel(ts: number, now: number) {
   if (hours < 24) return "Сегодня";
   if (hours < 48) return "Вчера";
   return `${Math.round(hours / 24)} дн.`;
+}
+
+/** Short card line: «ремонт на магистрали, норма к 18:00». */
+export function causeLine(cause: string, expectedNormalAt: string | null) {
+  const head = cause.split(",")[0].trim();
+  const lowered = head.charAt(0).toLowerCase() + head.slice(1);
+  return expectedNormalAt ? `${lowered}, норма к ${expectedNormalAt}` : lowered;
 }
 
 export function dayLabel(offset: number) {

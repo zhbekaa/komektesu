@@ -2,17 +2,16 @@ export type WaterStatus = "normal" | "low" | "none";
 export type ReportType = "no_water" | "no_hot" | "low_pressure" | "emergency";
 export type TankerStatus = "idle" | "en_route" | "serving";
 
-export type District = {
+/** Live district state. Geometry stays in lib/aktau-geo.ts and is joined by id. */
+export type DistrictState = {
   id: string;
-  name: string;
   status: WaterStatus;
-  baseFill: string;
-  path: string;
-  label: { x: number; y: number };
-  anchor: { x: number; y: number };
+  /** Simulated, not a network reading. */
+  pressureBar: number;
   expectedNormalAt: string | null;
   updatedAt: number;
-  pressureBar: number;
+  complaints6h: number;
+  cause: string | null;
 };
 
 export type Report = {
@@ -29,6 +28,8 @@ export type Tanker = {
   id: string;
   number: number;
   status: TankerStatus;
+  plate: string;
+  capacityLiters: number;
   waterLiters: number;
   x: number;
   y: number;
@@ -42,6 +43,7 @@ export type Tanker = {
   initialEtaMin: number;
   etaMinutes: number;
   etaToHome: number | null;
+  distanceKm: number | null;
 };
 
 export type DeliveryRequest = {
@@ -71,16 +73,54 @@ export type ScheduleSlot = {
   status: WaterStatus;
 };
 
+export type Suggestion = {
+  districtId: string;
+  districtName: string;
+  tankerId: string;
+  tankerNumber: number;
+  tankerPlate: string;
+  etaMinutes: number;
+  distanceKm: number;
+  reason: string;
+};
+
+export type Incident = {
+  id: string;
+  title: string;
+  summary: string;
+  districtIds: string[];
+  startedAt: number;
+  expectedNormalAt: string | null;
+};
+
+export type SnapshotMeta = {
+  simulated: boolean;
+  city: string;
+  operator: string;
+  waterSource: string;
+  coverage: {
+    districts: number;
+    areaKm2: number;
+    buildings: number;
+    residentialBuildings: number;
+  };
+  sources: { label: string; source: string; detail: string }[];
+  assumptions: string[];
+};
+
 export type Snapshot = {
   serverTime: number;
   homeDistrictId: string;
-  districts: District[];
+  meta: SnapshotMeta;
+  incident: Incident | null;
+  districts: DistrictState[];
   tankers: Tanker[];
   reports: Report[];
   requests: DeliveryRequest[];
   notifications: AppNotification[];
   schedules: Record<string, ScheduleSlot[]>;
-  complaintCounts: Record<string, number>;
+  situation: string;
+  suggestions: Suggestion[];
 };
 
 export type Profile = {
