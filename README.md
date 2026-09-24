@@ -1,6 +1,6 @@
 # Komektesu
 
-Resident app for water in Aktau. The map colors neighborhoods green (normal pressure), yellow (low pressure or scheduled supply), and red (no water). Two taps send a report. A water tanker can be requested and followed on the map.
+Resident app for water in Aktau. The map is the real city: Caspian coast, arterial roads, and microdistrict polygons from OpenStreetMap. Colour shows supply status — green for normal, yellow for low pressure, red for no water. Pressure, the tanker fleet, and complaints are a labelled demo until КЖСА telemetry exists. Distances on the map are real.
 
 Start the API in `komektesu_backend` first (`npm run dev` on port 3000), then:
 
@@ -11,4 +11,6 @@ npm start
 
 The app calls `http://localhost:3000` by default. On a phone, set `EXPO_PUBLIC_API_URL` to your computer's address.
 
-Pitch path: open the map on 14 мкр, tap **Сообщить о проблеме**, then **Нет воды**. The neighborhood turns red and the nearest tanker, №12, is dispatched with an arrival time.
+The phone joins `/api/state` onto `lib/aktau-geo.ts` (the same geometry the console uses). Delivery and the home pin sit on a district centre.
+
+Pitch path: the console opens on the 14/15 incident. In the resident app, open 14 мкр, tap **Сообщить о проблеме**, then **Нет воды**. The report shows in the resident history, and confirming it in the console marks it confirmed.
