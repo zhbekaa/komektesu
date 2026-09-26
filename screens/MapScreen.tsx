@@ -25,7 +25,6 @@ export function MapScreen({
   onProfile: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [legend, setLegend] = useState(false);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
   const districts = joinDistricts(snapshot.districts);
@@ -123,10 +122,7 @@ export function MapScreen({
             return home ? { x: home.center.x, y: home.center.y } : null;
           })()}
         />
-        <Pressable style={styles.eye} onPress={() => setLegend((value) => !value)}>
-          <Ionicons name={legend ? "eye-off-outline" : "eye-outline"} size={20} color={colors.text} />
-        </Pressable>
-        {legend ? <Legend /> : null}
+        <Legend />
         <DistrictCard district={selected} now={snapshot.serverTime} />
       </View>
       <Pressable style={styles.report} onPress={onReport}>
@@ -171,12 +167,12 @@ function DistrictCard({ district, now }: { district: DistrictView; now: number }
 
 function Legend() {
   const rows = [
-    { color: MAP_FILL.normal, label: "Нормальное давление" },
-    { color: MAP_FILL.low, label: "Слабый напор / по графику" },
-    { color: MAP_FILL.none, label: "Воды нет" },
+    { color: MAP_FILL.normal, label: "Норма" },
+    { color: MAP_FILL.low, label: "Слабый напор" },
+    { color: MAP_FILL.none, label: "Нет воды" },
   ];
   return (
-    <View style={styles.legend}>
+    <View style={styles.legend} pointerEvents="none">
       {rows.map((row) => (
         <View key={row.label} style={styles.legendRow}>
           <View style={[styles.swatch, { backgroundColor: row.color }]} />
@@ -239,37 +235,23 @@ const styles = StyleSheet.create({
   banner: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   bannerText: { flex: 1, fontFamily: font.medium, fontSize: 13, lineHeight: 16 },
   mapWrap: { flex: 1 },
-  eye: {
-    position: "absolute",
-    right: 16,
-    bottom: 126,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1A2640",
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-  },
   legend: {
     position: "absolute",
-    right: 16,
-    bottom: 174,
+    top: 10,
+    left: 10,
     backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 12,
-    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 6,
     shadowColor: "#1A2640",
     shadowOpacity: 0.14,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  legendRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  swatch: { width: 14, height: 14, borderRadius: 4 },
-  legendText: { fontFamily: font.medium, fontSize: 12, color: colors.text },
+  legendRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  swatch: { width: 10, height: 10, borderRadius: 3 },
+  legendText: { fontFamily: font.medium, fontSize: 11, color: colors.text },
   card: {
     position: "absolute",
     left: 16,
