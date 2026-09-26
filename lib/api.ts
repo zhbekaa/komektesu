@@ -32,6 +32,10 @@ export function requestTanker(input: { districtId: string; building: string; res
   return request("/api/requests", input);
 }
 
-export function markRead() {
-  return request("/api/notifications", {});
+export function markRead(ids?: string[]) {
+  return request("/api/notifications", { ids });
+}
+
+export function sendFeedback(input: { text: string; residentName: string }) {
+  return request("/api/feedback", input);
 }

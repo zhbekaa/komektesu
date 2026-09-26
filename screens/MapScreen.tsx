@@ -13,23 +13,29 @@ export function MapScreen({
   selectedId,
   onSelect,
   onReport,
+  onSchedule,
   onNotifications,
   onProfile,
+  residentName,
 }: {
   snapshot: Snapshot;
   now: number;
   selectedId: string;
   onSelect: (id: string) => void;
   onReport: () => void;
+  onSchedule: () => void;
   onNotifications: () => void;
   onProfile: () => void;
+  residentName: string;
 }) {
   const [query, setQuery] = useState("");
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
   const districts = joinDistricts(snapshot.districts);
   const selected = findDistrict(districts, selectedId);
-  const unread = snapshot.notifications.filter((item) => !item.read).length;
+  const unread = snapshot.notifications.filter(
+    (item) => !item.read && (!item.audience || item.audience === residentName),
+  ).length;
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -123,7 +129,7 @@ export function MapScreen({
           })()}
         />
         <Legend />
-        <DistrictCard district={selected} now={snapshot.serverTime} />
+        <DistrictCard district={selected} now={snapshot.serverTime} onSchedule={onSchedule} />
       </View>
       <Pressable style={styles.report} onPress={onReport}>
         <Ionicons name="add" size={18} color={colors.white} />
@@ -133,7 +139,7 @@ export function MapScreen({
   );
 }
 
-function DistrictCard({ district, now }: { district: DistrictView; now: number }) {
+function DistrictCard({ district, now, onSchedule }: { district: DistrictView; now: number; onSchedule: () => void }) {
   const color = statusColor(district.status);
   return (
     <View style={styles.card}>
@@ -154,13 +160,15 @@ function DistrictCard({ district, now }: { district: DistrictView; now: number }
         <Ionicons name="speedometer-outline" size={14} color={colors.secondary} />
         <Text style={styles.metaText}>Давление {district.pressureBar.toFixed(1)} бар · демо</Text>
       </View>
-      <View style={styles.updated}>
-        <View style={styles.meta}>
-          <Ionicons name="refresh" size={14} color={colors.muted} />
-          <Text style={styles.updatedText}>Обновлено {ago(district.updatedAt, now)}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+      <View style={styles.meta}>
+        <Ionicons name="refresh" size={14} color={colors.muted} />
+        <Text style={styles.updatedText}>Обновлено {ago(district.updatedAt, now)}</Text>
       </View>
+      <Pressable style={styles.schedule} onPress={onSchedule}>
+        <Ionicons name="calendar-outline" size={16} color={colors.blue} />
+        <Text style={styles.scheduleText}>График подачи</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.blue} />
+      </Pressable>
     </View>
   );
 }
@@ -256,7 +264,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 16,
+    bottom: 76,
     backgroundColor: colors.white,
     borderRadius: 20,
     paddingTop: 14,
@@ -275,8 +283,9 @@ const styles = StyleSheet.create({
   pressureText: { fontFamily: font.medium, fontSize: 14 },
   meta: { flexDirection: "row", alignItems: "center", gap: 6 },
   metaText: { fontFamily: font.regular, fontSize: 13, color: colors.secondary },
-  updated: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   updatedText: { fontFamily: font.regular, fontSize: 12, color: colors.muted },
+  schedule: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 2 },
+  scheduleText: { flex: 1, fontFamily: font.semibold, fontSize: 14, color: colors.blue },
   report: {
     position: "absolute",
     alignSelf: "center",

@@ -4,7 +4,7 @@ import { DistrictMap } from "../components/DistrictMap";
 import { districtName, joinDistricts } from "../lib/districts";
 import { ago, liveTanker, tankerLabel } from "../lib/format";
 import { colors, font } from "../lib/theme";
-import type { DeliveryRequest, Snapshot, Tanker } from "../lib/types";
+import type { DeliveryRequest, Profile, Snapshot, Tanker } from "../lib/types";
 
 export function TankersScreen({
   snapshot,
@@ -13,6 +13,7 @@ export function TankersScreen({
   onOpenRequests,
   onTrack,
   busy,
+  profile,
 }: {
   snapshot: Snapshot;
   now: number;
@@ -20,13 +21,18 @@ export function TankersScreen({
   onOpenRequests: () => void;
   onTrack: (tankerId: string) => void;
   busy: boolean;
+  profile: Profile;
 }) {
   const idle = snapshot.tankers
     .filter((tanker) => tanker.status === "idle" && tanker.etaToHome != null)
     .sort((a, b) => (a.etaToHome ?? 99) - (b.etaToHome ?? 99));
   const nearest = idle[0] ?? snapshot.tankers.find((tanker) => tanker.status === "en_route");
-  const active = snapshot.requests.filter((request) => request.status !== "done");
-  const mine = active.find((request) => request.districtId === snapshot.homeDistrictId);
+  const active = snapshot.requests.filter(
+    (request) => request.residentName === profile.name && request.status !== "done",
+  );
+  const mine = active.find(
+    (request) => request.districtId === profile.districtId && request.building === profile.building,
+  );
   const assigned = mine?.tankerId
     ? snapshot.tankers.find((tanker) => tanker.id === mine.tankerId)
     : undefined;
@@ -100,7 +106,7 @@ export function TankersScreen({
           <Ionicons name="chevron-forward" size={16} color={colors.blue} />
         </Pressable>
       </View>
-      {active.length === 0 ? <Text style={styles.empty}>Активных заявок нет</Text> : null}
+      {active.length === 0 ? <Text style={styles.empty}>Ваших активных заявок нет</Text> : null}
       {active.map((request) => {
         const tanker = snapshot.tankers.find((item) => item.id === request.tankerId);
         return (

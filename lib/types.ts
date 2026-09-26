@@ -19,9 +19,11 @@ export type Report = {
   districtId: string;
   building: string;
   type: ReportType;
+  /** Typed on the phone for this demo. History and notices match the string; there is no residents row yet. */
   residentName: string;
   createdAt: number;
   confirmed: boolean;
+  dismissed: boolean;
 };
 
 export type Tanker = {
@@ -63,7 +65,8 @@ export type AppNotification = {
   body: string;
   createdAt: number;
   read: boolean;
-  kind: "outage" | "tanker" | "schedule";
+  kind: "outage" | "tanker" | "schedule" | "report";
+  audience: string | null;
 };
 
 export type ScheduleSlot = {

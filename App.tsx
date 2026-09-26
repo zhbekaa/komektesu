@@ -52,6 +52,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState("14");
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportBuilding, setReportBuilding] = useState(INITIAL_PROFILE.building);
+  const [addressReady, setAddressReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -65,7 +67,9 @@ export default function App() {
       skew.current = next.serverTime - Date.now();
       setSnapshot(next);
       setError(null);
-      const fresh = next.notifications.find((item) => !item.read && item.kind === "tanker");
+      const fresh = next.notifications.find(
+        (item) => !item.read && (!item.audience || item.audience === profile.name),
+      );
       if (fresh && seen.current && fresh.id !== seen.current && fresh.createdAt > next.serverTime - 8000) {
         setToast(fresh.body);
       }
@@ -73,7 +77,7 @@ export default function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Нет связи с сервером");
     }
-  }, [profile.districtId]);
+  }, [profile.districtId, profile.name]);
 
   useEffect(() => {
     const kickoff = setTimeout(() => {
@@ -97,45 +101,51 @@ export default function App() {
   }, [toast]);
 
   async function submitReport(type: ReportType) {
+    const building = reportBuilding.trim();
+    if (!building) return;
     setBusy(true);
     try {
       const next = await sendReport({
         districtId: selectedId,
-        building: profile.building,
+        building,
         type,
         residentName: profile.name,
       });
       setSnapshot(next);
-      setSuccess("Сигнал принят. Диспетчер видит его на карте.");
+      setSuccess("Сигнал принят. Диспетчер видит дом, а район обновится на карте.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось отправить");
+      setToast(err instanceof Error ? err.message : "Не удалось отправить");
     } finally {
       setBusy(false);
     }
   }
 
-  async function dispatch() {
+  async function requestWater(place: { districtId: string; building: string }, announce: boolean) {
+    const building = place.building.trim();
+    if (!building) return;
     setBusy(true);
     try {
       const next = await requestTanker({
-        districtId: profile.districtId,
-        building: profile.building,
+        districtId: place.districtId,
+        building,
         residentName: profile.name,
       });
       setSnapshot(next);
       const mine = next.requests.find(
         (item) =>
-          item.districtId === profile.districtId &&
-          item.building === profile.building &&
+          item.residentName === profile.name &&
+          item.districtId === place.districtId &&
+          item.building === building &&
           item.status !== "done",
       );
-      if (mine?.status === "en_route" && mine.tankerId) {
+      if (announce && mine?.status === "en_route" && mine.tankerId) {
+        setReportOpen(false);
         setStack({ name: "track", tankerId: mine.tankerId });
-      } else {
+      } else if (announce) {
         setToast("Заявка у диспетчера. Водовоз выедет после назначения.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось отправить заявку");
+      setToast(err instanceof Error ? err.message : "Не удалось отправить заявку");
     } finally {
       setBusy(false);
     }
@@ -155,8 +165,39 @@ export default function App() {
     );
   }
 
+  if (!addressReady) {
+    return (
+      <View style={styles.frame}>
+        <SafeAreaView style={[styles.root, { backgroundColor: colors.white }]}>
+          <ExpoStatusBar style="dark" />
+          <AddressScreen
+            mode="gate"
+            snapshot={snapshot}
+            profile={profile}
+            onSave={(districtId, building, name) => {
+              setProfile((current) => ({ ...current, name, districtId, building }));
+              setSelectedId(districtId);
+              setAddressReady(true);
+            }}
+          />
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   const profileBlue = tab === "profile" && !stack;
   const placeName = districtName(selectedId);
+  const filedRequest = snapshot.requests.find(
+    (item) =>
+      item.residentName === profile.name &&
+      item.districtId === selectedId &&
+      item.building === reportBuilding.trim() &&
+      item.status !== "done",
+  );
+  const trackedTankerId =
+    filedRequest?.tankerId ??
+    snapshot.tankers.find((item) => item.targetDistrictId === selectedId && item.status !== "idle")?.id ??
+    null;
 
   function openTrack(tankerId: string) {
     setReportOpen(false);
@@ -172,8 +213,12 @@ export default function App() {
         {stack?.name === "notifications" ? (
           <NotificationsScreen
             snapshot={snapshot}
+            residentName={profile.name}
             onBack={() => {
-              void markRead().then(setSnapshot).catch(() => undefined);
+              const ids = snapshot.notifications
+                .filter((item) => !item.audience || item.audience === profile.name)
+                .map((item) => item.id);
+              void markRead(ids).then(setSnapshot).catch(() => undefined);
               setStack(null);
             }}
           />
@@ -184,6 +229,11 @@ export default function App() {
             snapshot={snapshot}
             profile={profile}
             onBack={() => setStack(null)}
+            onOpen={(id) => {
+              setSelectedId(id);
+              setTab("map");
+              setStack(null);
+            }}
             onToggle={(id) =>
               setProfile((current) => ({
                 ...current,
@@ -197,24 +247,26 @@ export default function App() {
         {stack?.name === "language" ? (
           <LanguageScreen language={profile.language} onBack={() => setStack(null)} onChange={(language) => setProfile((current) => ({ ...current, language }))} />
         ) : null}
-        {stack?.name === "support" ? <SupportScreen onBack={() => setStack(null)} /> : null}
+        {stack?.name === "support" ? <SupportScreen residentName={profile.name} onBack={() => setStack(null)} /> : null}
         {stack?.name === "about" ? <AboutScreen onBack={() => setStack(null)} /> : null}
         {stack?.name === "address" ? (
           <AddressScreen
             snapshot={snapshot}
             profile={profile}
             onBack={() => setStack(null)}
-            onSave={(districtId, building) => {
-              setProfile((current) => ({ ...current, districtId, building }));
+            onSave={(districtId, building, name) => {
+              setProfile((current) => ({ ...current, name, districtId, building }));
               setSelectedId(districtId);
               setStack(null);
             }}
           />
         ) : null}
         {stack?.name === "requests" ? (
-          <RequestsScreen snapshot={snapshot} now={now} onBack={() => setStack(null)} onTrack={openTrack} />
+          <RequestsScreen snapshot={snapshot} profile={profile} now={now} onBack={() => setStack(null)} onTrack={openTrack} />
         ) : null}
-        {stack?.name === "track" ? <TrackScreen snapshot={snapshot} now={now} tankerId={stack.tankerId} onBack={() => setStack(null)} /> : null}
+        {stack?.name === "track" ? (
+          <TrackScreen snapshot={snapshot} profile={profile} now={now} tankerId={stack.tankerId} onBack={() => setStack(null)} />
+        ) : null}
         {!stack && tab === "map" ? (
           <MapScreen
             snapshot={snapshot}
@@ -223,10 +275,13 @@ export default function App() {
             onSelect={setSelectedId}
             onReport={() => {
               setSuccess(null);
+              setReportBuilding(selectedId === profile.districtId ? profile.building : "");
               setReportOpen(true);
             }}
+            onSchedule={() => setTab("schedule")}
             onNotifications={() => setStack({ name: "notifications" })}
             onProfile={() => setTab("profile")}
+            residentName={profile.name}
           />
         ) : null}
         {!stack && tab === "schedule" ? (
@@ -237,7 +292,8 @@ export default function App() {
             snapshot={snapshot}
             now={now}
             busy={busy}
-            onRequest={() => void dispatch()}
+            onRequest={() => void requestWater({ districtId: profile.districtId, building: profile.building }, true)}
+            profile={profile}
             onOpenRequests={() => setStack({ name: "requests" })}
             onTrack={openTrack}
           />
@@ -253,18 +309,19 @@ export default function App() {
       ) : null}
       {reportOpen ? (
         <ReportSheet
-          place={`${placeName}, дом ${profile.building}`}
+          place={placeName}
+          building={reportBuilding}
+          onBuilding={setReportBuilding}
+          otherDistrict={selectedId !== profile.districtId}
           busy={busy}
           success={success}
+          requestStatus={filedRequest && filedRequest.status !== "done" ? filedRequest.status : null}
+          canTrack={trackedTankerId !== null}
           onClose={() => setReportOpen(false)}
           onSubmit={(type) => void submitReport(type)}
+          onRequest={() => void requestWater({ districtId: selectedId, building: reportBuilding }, false)}
           onTrack={() => {
-            const tanker = snapshot.tankers.find((item) => item.targetDistrictId === selectedId && item.status !== "idle");
-            if (tanker) openTrack(tanker.id);
-            else {
-              setReportOpen(false);
-              setTab("tankers");
-            }
+            if (trackedTankerId) openTrack(trackedTankerId);
           }}
         />
       ) : null}

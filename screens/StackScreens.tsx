@@ -3,27 +3,47 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { Ionicons } from "@expo/vector-icons";
 import { DistrictMap } from "../components/DistrictMap";
 import { districtName, findDistrict, joinDistricts } from "../lib/districts";
+import { sendFeedback } from "../lib/api";
 import { ago, liveTanker, reportLabel } from "../lib/format";
 import { colors, font } from "../lib/theme";
 import type { Profile, Snapshot } from "../lib/types";
 
-export function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) {
+export function ScreenHeader({ title, onBack }: { title: string; onBack?: () => void }) {
   return (
     <View style={styles.header}>
-      <Pressable onPress={onBack} hitSlop={8}>
-        <Ionicons name="chevron-back" size={24} color={colors.text} />
-      </Pressable>
+      {onBack ? (
+        <Pressable onPress={onBack} hitSlop={8}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </Pressable>
+      ) : (
+        <View style={{ width: 24 }} />
+      )}
       <Text style={styles.headerTitle}>{title}</Text>
     </View>
   );
 }
 
-export function NotificationsScreen({ snapshot, onBack }: { snapshot: Snapshot; onBack: () => void }) {
+export function NotificationsScreen({
+  snapshot,
+  residentName,
+  onBack,
+}: {
+  snapshot: Snapshot;
+  residentName: string;
+  onBack: () => void;
+}) {
+  const items = snapshot.notifications.filter((item) => !item.audience || item.audience === residentName);
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Уведомления" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.pad}>
-        {snapshot.notifications.map((item) => (
+        {items.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Уведомлений нет</Text>
+            <Text style={styles.cardBody}>Здесь появятся отключения, назначение водовоза и ответ по вашему сигналу.</Text>
+          </View>
+        ) : null}
+        {items.map((item) => (
           <View key={item.id} style={[styles.card, !item.read && styles.unread]}>
             <Text style={styles.cardTitle}>{item.title}</Text>
             <Text style={styles.cardBody}>{item.body}</Text>
@@ -44,9 +64,7 @@ export function HistoryScreen({
   profile: Profile;
   onBack: () => void;
 }) {
-  const mine = snapshot.reports.filter(
-    (report) => report.residentName === profile.name && report.districtId === profile.districtId && report.building === profile.building,
-  );
+  const mine = snapshot.reports.filter((report) => report.residentName === profile.name);
   return (
     <View style={styles.screen}>
       <ScreenHeader title="История сигналов" onBack={onBack} />
@@ -55,7 +73,7 @@ export function HistoryScreen({
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Сигналов пока нет</Text>
             <Text style={styles.cardBody}>
-              По адресу {districtName(profile.districtId)}, дом {profile.building} ещё ничего не отправлено. Сообщение с карты появится здесь.
+              От имени {profile.name} ещё ничего не отправлено. Сообщение с карты появится здесь и останется, если вы смените адрес.
             </Text>
           </View>
         ) : null}
@@ -64,7 +82,7 @@ export function HistoryScreen({
             <Text style={styles.cardTitle}>{reportLabel(report.type)}</Text>
             <Text style={styles.cardBody}>
               {districtName(report.districtId)}, дом {report.building}
-              {report.confirmed ? " · подтверждено" : ""}
+              {report.confirmed ? " · подтверждено" : report.dismissed ? " · не подтверждено" : " · ждёт проверки"}
             </Text>
             <Text style={styles.time}>{ago(report.createdAt, snapshot.serverTime)}</Text>
           </View>
@@ -78,11 +96,13 @@ export function FavoritesScreen({
   snapshot,
   profile,
   onToggle,
+  onOpen,
   onBack,
 }: {
   snapshot: Snapshot;
   profile: Profile;
   onToggle: (id: string) => void;
+  onOpen: (id: string) => void;
   onBack: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -103,11 +123,16 @@ export function FavoritesScreen({
       <ScreenHeader title="Избранные районы" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
         {saved.length === 0 ? <Text style={styles.note}>Сохранённых районов нет.</Text> : null}
+        {saved.length > 0 ? <Text style={styles.note}>Нажмите на район, чтобы открыть его на карте и в графике.</Text> : null}
         {saved.map((district) => (
-          <Pressable key={district.id} style={styles.row} onPress={() => onToggle(district.id)}>
-            <Text style={styles.cardTitle}>{district.name}</Text>
-            <Ionicons name="heart" size={22} color={colors.red} />
-          </Pressable>
+          <View key={district.id} style={styles.row}>
+            <Pressable style={{ flex: 1 }} onPress={() => onOpen(district.id)}>
+              <Text style={styles.cardTitle}>{district.name}</Text>
+            </Pressable>
+            <Pressable onPress={() => onToggle(district.id)} hitSlop={8}>
+              <Ionicons name="heart" size={22} color={colors.red} />
+            </Pressable>
+          </View>
         ))}
         <TextInput
           value={query}
@@ -130,6 +155,8 @@ export function FavoritesScreen({
 }
 
 export function LanguageScreen({
+  language,
+  onChange,
   onBack,
 }: {
   language: Profile["language"];
@@ -140,19 +167,24 @@ export function LanguageScreen({
     <View style={styles.screen}>
       <ScreenHeader title="Язык приложения" onBack={onBack} />
       <View style={styles.pad}>
-        <View style={styles.row}>
+        <Pressable style={styles.row} onPress={() => onChange("ru")}>
           <Text style={styles.cardTitle}>Русский</Text>
-          <Ionicons name="checkmark" size={22} color={colors.blue} />
+          {language === "ru" ? <Ionicons name="checkmark" size={22} color={colors.blue} /> : null}
+        </Pressable>
+        <View style={[styles.row, { opacity: 0.45 }]}>
+          <Text style={styles.cardTitle}>Қазақша</Text>
         </View>
-        <Text style={styles.note}>Қазақша скрыта, пока нет строк. Интерфейс только на русском.</Text>
+        <Text style={styles.note}>Қазақша появится, когда будут готовы строки. Сейчас интерфейс на русском, и переключатель это показывает.</Text>
       </View>
     </View>
   );
 }
 
-export function SupportScreen({ onBack }: { onBack: () => void }) {
+export function SupportScreen({ residentName, onBack }: { residentName: string; onBack: () => void }) {
   const [text, setText] = useState("");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Поддержка" onBack={onBack} />
@@ -163,14 +195,24 @@ export function SupportScreen({ onBack }: { onBack: () => void }) {
           placeholder="Опишите вопрос"
           placeholderTextColor={colors.muted}
           multiline
+          editable={!sent}
           style={styles.input}
         />
+        {error ? <Text style={styles.note}>{error}</Text> : null}
+        {sent ? <Text style={styles.note}>Сообщение записано. Диспетчерская его получила.</Text> : null}
         <Pressable
-          style={[styles.button, !text.trim() && { opacity: 0.5 }]}
-          disabled={!text.trim()}
-          onPress={() => setSent(true)}
+          style={[styles.button, (!text.trim() || sent) && { opacity: 0.5 }]}
+          disabled={!text.trim() || busy || sent}
+          onPress={() => {
+            setBusy(true);
+            setError(null);
+            void sendFeedback({ text, residentName })
+              .then(() => setSent(true))
+              .catch((err: unknown) => setError(err instanceof Error ? err.message : "Не удалось отправить"))
+              .finally(() => setBusy(false));
+          }}
         >
-          <Text style={styles.buttonText}>{sent ? "Отправлено" : "Отправить"}</Text>
+          <Text style={styles.buttonText}>{sent ? "Отправлено" : busy ? "Отправляем…" : "Отправить"}</Text>
         </Pressable>
       </View>
     </View>
@@ -196,15 +238,19 @@ export function AddressScreen({
   profile,
   onSave,
   onBack,
+  mode = "edit",
 }: {
   snapshot: Snapshot;
   profile: Profile;
-  onSave: (districtId: string, building: string) => void;
-  onBack: () => void;
+  onSave: (districtId: string, building: string, name: string) => void;
+  onBack?: () => void;
+  mode?: "gate" | "edit";
 }) {
+  const [name, setName] = useState(profile.name);
   const [districtId, setDistrictId] = useState(profile.districtId);
   const [building, setBuilding] = useState(profile.building);
   const [query, setQuery] = useState("");
+  const ready = name.trim().length > 0 && building.trim().length > 0;
   const districts = joinDistricts(snapshot.districts);
   const selected = findDistrict(districts, districtId);
   const needle = query.trim().toLowerCase();
@@ -218,8 +264,15 @@ export function AddressScreen({
     : [];
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Адрес" onBack={onBack} />
+      <ScreenHeader title={mode === "gate" ? "Ваш адрес" : "Адрес"} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
+        {mode === "gate" ? (
+          <Text style={styles.note}>
+            Подтвердите имя и дом. Карта, график и заявки откроются для этого адреса. Поля уже заполнены для демо, их можно поменять.
+          </Text>
+        ) : null}
+        <Text style={styles.label}>Имя</Text>
+        <TextInput value={name} onChangeText={setName} placeholder="Имя" placeholderTextColor={colors.muted} style={styles.field} />
         <Text style={styles.label}>Микрорайон</Text>
         <Text style={styles.picked}>{selected?.name ?? districtId}</Text>
         <TextInput
@@ -248,20 +301,43 @@ export function AddressScreen({
         </View>
         <Text style={styles.label}>Дом</Text>
         <TextInput value={building} onChangeText={setBuilding} keyboardType="number-pad" style={styles.field} />
-        <Pressable style={styles.button} onPress={() => onSave(districtId, building.trim() || "12")}>
-          <Text style={styles.buttonText}>Сохранить</Text>
+        <Pressable
+          style={[styles.button, !ready && { opacity: 0.5 }]}
+          disabled={!ready}
+          onPress={() => onSave(districtId, building.trim(), name.trim())}
+        >
+          <Text style={styles.buttonText}>{mode === "gate" ? "Это мой адрес" : "Сохранить"}</Text>
         </Pressable>
       </ScrollView>
     </View>
   );
 }
 
-export function RequestsScreen({ snapshot, now, onBack, onTrack }: { snapshot: Snapshot; now: number; onBack: () => void; onTrack: (id: string) => void }) {
+export function RequestsScreen({
+  snapshot,
+  profile,
+  now,
+  onBack,
+  onTrack,
+}: {
+  snapshot: Snapshot;
+  profile: Profile;
+  now: number;
+  onBack: () => void;
+  onTrack: (id: string) => void;
+}) {
+  const mine = snapshot.requests.filter((request) => request.residentName === profile.name);
   return (
     <View style={styles.screen}>
       <ScreenHeader title="Заявки" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.pad}>
-        {snapshot.requests.map((request) => {
+        {mine.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Ваших заявок нет</Text>
+            <Text style={styles.cardBody}>Заявка появится, когда вы запросите подвоз со своего адреса.</Text>
+          </View>
+        ) : null}
+        {mine.map((request) => {
           const tanker = snapshot.tankers.find((item) => item.id === request.tankerId);
           const live = tanker ? liveTanker(tanker, now) : null;
           return (
@@ -280,13 +356,35 @@ export function RequestsScreen({ snapshot, now, onBack, onTrack }: { snapshot: S
   );
 }
 
+function trackTitle(
+  tanker: Snapshot["tankers"][number] | undefined,
+  live: { eta: number } | null,
+  districtLabel: string | undefined,
+  profile: Profile,
+) {
+  if (!tanker || !districtLabel) return "Машина ещё не выехала";
+  const home = tanker.targetDistrictId === profile.districtId;
+  if (live && tanker.status === "en_route") {
+    const where = home ? `к дому ${profile.building} в ${districtLabel}` : `в ${districtLabel}`;
+    return `Водовоз №${tanker.number} едет ${where}. Около ${live.eta} мин.`;
+  }
+  if (tanker.status === "serving") {
+    return home
+      ? `Водовоз №${tanker.number} на месте у дома ${profile.building}`
+      : `Водовоз №${tanker.number} на месте в ${districtLabel}`;
+  }
+  return "Машина ещё не выехала";
+}
+
 export function TrackScreen({
   snapshot,
+  profile,
   now,
   tankerId,
   onBack,
 }: {
   snapshot: Snapshot;
+  profile: Profile;
   now: number;
   tankerId: string;
   onBack: () => void;
@@ -318,14 +416,8 @@ export function TrackScreen({
         />
       </View>
       <View style={styles.trackCard}>
-        <Text style={styles.cardTitle}>
-            {tanker && live && tanker.status === "en_route"
-            ? `Водовоз №${tanker.number} прибудет к вашему дому через ${live.eta} мин · демо`
-            : tanker?.status === "serving"
-              ? `Водовоз №${tanker.number} на месте`
-              : "Машина ещё не выехала"}
-        </Text>
-        <Text style={styles.cardBody}>{district ? `${district.name}, можно следить за точкой на карте` : ""}</Text>
+        <Text style={styles.cardTitle}>{trackTitle(tanker, live, district?.name, profile)}</Text>
+        <Text style={styles.cardBody}>{district ? `${district.name}. Точка на карте — машина, а не весь район.` : ""}</Text>
       </View>
     </View>
   );

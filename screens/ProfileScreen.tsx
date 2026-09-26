@@ -17,12 +17,12 @@ export function ProfileScreen({
   profile: Profile;
   onOpen: (route: ProfileRoute) => void;
 }) {
-  const mine = snapshot.reports.filter(
-    (report) => report.residentName === profile.name && report.districtId === profile.districtId && report.building === profile.building,
-  );
+  const mine = snapshot.reports.filter((report) => report.residentName === profile.name);
   const confirmed = mine.filter((report) => report.confirmed).length;
   const last = mine[0];
-  const unread = snapshot.notifications.filter((item) => !item.read).length;
+  const unread = snapshot.notifications.filter(
+    (item) => !item.read && (!item.audience || item.audience === profile.name),
+  ).length;
   const homeName = districtName(profile.districtId);
 
   return (
