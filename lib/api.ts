@@ -1,6 +1,6 @@
 import type { ReportType, Snapshot } from "./types";
 
-const BASE = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+const BASE = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
 async function request(path: string, body?: unknown) {
   const response = await fetch(`${BASE}${path}`, {
