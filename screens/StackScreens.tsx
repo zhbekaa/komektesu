@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DistrictMap } from "../components/DistrictMap";
 import { districtName, findDistrict, joinDistricts } from "../lib/districts";
 import { sendFeedback } from "../lib/api";
@@ -224,7 +225,7 @@ export function AboutScreen({ onBack }: { onBack: () => void }) {
     <View style={styles.screen}>
       <ScreenHeader title="О приложении" onBack={onBack} />
       <View style={styles.pad}>
-        <Text style={styles.cardTitle}>Komektesu</Text>
+        <Image source={require("../assets/logo.png")} style={styles.logo} resizeMode="contain" accessibilityLabel="KomekteSU" />
         <Text style={styles.cardBody}>
           Карта микрорайонов Актау взята из OpenStreetMap: берег, дороги и границы настоящие. Давление, водовозы и жалобы на этой сборке — демо, пока нет телеметрии КЖСА. Зелёный район — норма, жёлтый — слабый напор, красный — воды нет.
         </Text>
@@ -267,9 +268,12 @@ export function AddressScreen({
       <ScreenHeader title={mode === "gate" ? "Ваш адрес" : "Адрес"} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
         {mode === "gate" ? (
-          <Text style={styles.note}>
-            Подтвердите имя и дом. Карта, график и заявки откроются для этого адреса. Поля уже заполнены для демо, их можно поменять.
-          </Text>
+          <>
+            <Image source={require("../assets/logo.png")} style={styles.logo} resizeMode="contain" accessibilityLabel="KomekteSU" />
+            <Text style={styles.note}>
+              Подтвердите имя и дом. Карта, график и заявки откроются для этого адреса. Поля уже заполнены для демо, их можно поменять.
+            </Text>
+          </>
         ) : null}
         <Text style={styles.label}>Имя</Text>
         <TextInput value={name} onChangeText={setName} placeholder="Имя" placeholderTextColor={colors.muted} style={styles.field} />
@@ -389,6 +393,7 @@ export function TrackScreen({
   tankerId: string;
   onBack: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const tanker = snapshot.tankers.find((item) => item.id === tankerId);
   const districts = joinDistricts(snapshot.districts);
   const district = findDistrict(districts, tanker?.targetDistrictId ?? snapshot.homeDistrictId);
@@ -415,7 +420,7 @@ export function TrackScreen({
           fitPoints={fitPoints}
         />
       </View>
-      <View style={styles.trackCard}>
+      <View style={[styles.trackCard, { paddingBottom: 16 + insets.bottom }]}>
         <Text style={styles.cardTitle}>{trackTitle(tanker, live, district?.name, profile)}</Text>
         <Text style={styles.cardBody}>{district ? `${district.name}. Точка на карте — машина, а не весь район.` : ""}</Text>
       </View>
@@ -430,6 +435,7 @@ const styles = StyleSheet.create({
   pad: { padding: 16, gap: 10 },
   card: { backgroundColor: colors.white, borderRadius: 16, padding: 14, gap: 4 },
   unread: { borderWidth: 1, borderColor: colors.blueSoft },
+  logo: { width: 196, height: 181, alignSelf: "center" },
   cardTitle: { fontFamily: font.semibold, fontSize: 15, color: colors.text },
   cardBody: { fontFamily: font.regular, fontSize: 13, color: colors.secondary, lineHeight: 18 },
   time: { fontFamily: font.regular, fontSize: 12, color: colors.muted, marginTop: 4 },

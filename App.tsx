@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Platform, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
+import { SafeAreaProvider, SafeAreaView, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabBar, type TabId } from "./components/TabBar";
 import { fetchState, markRead, requestTanker, sendReport } from "./lib/api";
 import { districtName } from "./lib/districts";
@@ -39,6 +40,15 @@ const INITIAL_PROFILE: Profile = {
 };
 
 export default function App() {
+  return (
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <Root />
+    </SafeAreaProvider>
+  );
+}
+
+function Root() {
+  const insets = useSafeAreaInsets();
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -153,15 +163,16 @@ export default function App() {
 
   if ((!fontsLoaded && !fontError) || !snapshot) {
     return (
-      <View style={styles.boot}>
+      <SafeAreaView style={styles.boot}>
+        <Image source={require("./assets/logo.png")} style={styles.bootLogo} resizeMode="contain" accessibilityLabel="KomekteSU" />
         <ActivityIndicator color={colors.blue} />
-        <Text style={styles.bootText}>{error ?? "Komektesu"}</Text>
+        {error ? <Text style={styles.bootText}>{error}</Text> : null}
         {error ? (
           <Pressable onPress={() => void load()}>
             <Text style={styles.retry}>Повторить</Text>
           </Pressable>
         ) : null}
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -207,9 +218,12 @@ export default function App() {
 
   return (
     <View style={styles.frame}>
-    <SafeAreaView style={[styles.root, { backgroundColor: profileBlue ? colors.blue : colors.white }]}>
+    <SafeAreaView
+      style={[styles.root, { backgroundColor: profileBlue ? colors.blue : colors.white }]}
+      edges={["top", "left", "right"]}
+    >
       <ExpoStatusBar style={profileBlue ? "light" : "dark"} />
-      <View style={styles.body}>
+      <View style={[styles.body, stack && stack.name !== "track" ? { paddingBottom: insets.bottom } : null]}>
         {stack?.name === "notifications" ? (
           <NotificationsScreen
             snapshot={snapshot}
@@ -337,7 +351,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, width: "100%", maxWidth: 430 },
   body: { flex: 1, backgroundColor: colors.bg },
   boot: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: colors.white },
-  bootText: { fontSize: 16, color: colors.secondary },
+  bootLogo: { width: 210, height: 194 },
+  bootText: { fontSize: 16, color: colors.secondary, textAlign: "center", paddingHorizontal: 24 },
   retry: { color: colors.blue, fontFamily: font.semibold, fontSize: 16 },
   toast: {
     position: "absolute",

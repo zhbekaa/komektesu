@@ -42,7 +42,7 @@ export function TankersScreen({
       <Text style={styles.title}>Водовозы</Text>
       <View style={styles.banner}>
         <MaterialCommunityIcons name="water" size={20} color={colors.blue} />
-        <View style={{ flex: 1 }}>
+        <View style={styles.bannerCopy}>
           <Text style={styles.bannerTitle}>Демо: {snapshot.tankers.length} водовозов на карте</Text>
           <Text style={styles.bannerSub}>Обновлено {ago(snapshot.serverTime - 2 * 60 * 1000, snapshot.serverTime)}</Text>
         </View>
@@ -110,7 +110,7 @@ export function TankersScreen({
       {active.map((request) => {
         const tanker = snapshot.tankers.find((item) => item.id === request.tankerId);
         return (
-          <Pressable key={request.id} onPress={() => tanker && onTrack(tanker.id)}>
+          <Pressable key={request.id} style={styles.requestPress} onPress={() => tanker && onTrack(tanker.id)}>
             <RequestCard request={request} tanker={tanker} now={now} />
           </Pressable>
         );
@@ -133,16 +133,16 @@ function RequestCard({ request, tanker, now }: { request: DeliveryRequest; tanke
       <View style={styles.truckIconLg}>
         <MaterialCommunityIcons name="truck" size={20} color={colors.blue} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.requestTitle}>Заявка №{request.number}</Text>
+      <View style={styles.requestCopy}>
+        <View style={styles.requestTop}>
+          <Text style={styles.requestTitle}>Заявка №{request.number}</Text>
+          <View style={styles.accepted}>
+            <Text style={styles.acceptedText}>{state}</Text>
+          </View>
+        </View>
         <Text style={styles.requestSub}>
           {districtName(request.districtId)}, дом {request.building}
         </Text>
-      </View>
-      <View style={styles.requestState}>
-        <View style={styles.accepted}>
-          <Text style={styles.acceptedText}>{state}</Text>
-        </View>
         <Text style={styles.eta}>{eta}</Text>
       </View>
     </View>
@@ -164,6 +164,7 @@ const styles = StyleSheet.create({
     gap: 10,
     alignItems: "center",
   },
+  bannerCopy: { flex: 1, minWidth: 0 },
   bannerTitle: { fontFamily: font.semibold, fontSize: 14, color: colors.text },
   bannerSub: { fontFamily: font.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
   mapCard: { height: 430, marginTop: 10 },
@@ -190,7 +191,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  nearestTitle: { flex: 1, fontFamily: font.semibold, fontSize: 14, color: colors.text },
+  nearestTitle: { flex: 1, minWidth: 0, fontFamily: font.semibold, fontSize: 14, color: colors.text },
   badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
   badgeFree: { backgroundColor: colors.greenSoft },
   badgeBusy: { backgroundColor: colors.blueSoft },
@@ -212,6 +213,7 @@ const styles = StyleSheet.create({
   all: { flexDirection: "row", alignItems: "center", gap: 2 },
   allText: { fontFamily: font.semibold, fontSize: 14, color: colors.blue },
   empty: { marginHorizontal: 16, marginTop: 10, color: colors.muted, fontFamily: font.regular },
+  requestPress: { alignSelf: "stretch" },
   request: {
     marginHorizontal: 16,
     marginTop: 10,
@@ -219,7 +221,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 10,
   },
   truckIconLg: {
@@ -230,10 +232,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  requestTitle: { fontFamily: font.semibold, fontSize: 14, color: colors.text },
-  requestSub: { fontFamily: font.regular, fontSize: 12, color: colors.secondary, marginTop: 2 },
-  requestState: { alignItems: "flex-end", gap: 4 },
-  accepted: { backgroundColor: colors.blueSoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  requestCopy: { flex: 1, minWidth: 0, gap: 2 },
+  requestTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  requestTitle: { flex: 1, minWidth: 0, fontFamily: font.semibold, fontSize: 14, color: colors.text },
+  requestSub: { fontFamily: font.regular, fontSize: 12, color: colors.secondary },
+  accepted: { backgroundColor: colors.blueSoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
   acceptedText: { fontFamily: font.semibold, fontSize: 11, color: colors.blue },
-  eta: { fontFamily: font.regular, fontSize: 11, color: colors.muted },
+  eta: { fontFamily: font.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
 });

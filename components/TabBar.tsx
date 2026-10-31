@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, font } from "../lib/theme";
 
 export type TabId = "map" | "schedule" | "tankers" | "profile";
@@ -12,8 +13,9 @@ const TABS: { id: TabId; label: string; icon: "map" | "calendar" | "truck" | "pe
 ];
 
 export function TabBar({ tab, onChange }: { tab: TabId; onChange: (tab: TabId) => void }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}>
       <View style={styles.row}>
         {TABS.map((item) => {
           const active = tab === item.id;
@@ -44,7 +46,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.line,
     paddingTop: 6,
-    paddingBottom: 10,
   },
   row: { flexDirection: "row" },
   tab: { flex: 1, alignItems: "center", gap: 4, paddingTop: 4 },

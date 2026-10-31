@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, font } from "../lib/theme";
 import type { ReportType } from "../lib/types";
 
@@ -38,13 +39,14 @@ export function ReportSheet({
   onRequest: () => void;
   onTrack: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [picked, setPicked] = useState<ReportType | null>(null);
   const houseReady = building.trim().length > 0;
 
   return (
     <View style={styles.backdrop}>
       <Pressable style={styles.dismiss} onPress={onClose} />
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, { paddingBottom: 28 + insets.bottom }]}>
         <View style={styles.handle} />
         <Text style={styles.title}>Сообщить о проблеме</Text>
         <Text style={styles.place}>{place}</Text>
@@ -124,7 +126,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 28,
     gap: 8,
   },
   handle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.line, marginBottom: 6 },
